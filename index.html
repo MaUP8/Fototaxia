@@ -39,6 +39,48 @@
       color: white;
     }
 
+    #controls {
+      position: fixed;
+      bottom: -200px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      background-color: rgba(0, 0, 0, 0.8);
+      padding: 10px;
+      border-radius: 10px;
+      transition: bottom 0.4s ease;
+      z-index: 1;
+    }
+
+    #controls button {
+      font-size: 18px;
+      background-color: black;
+      color: #565252;
+      border: 1px solid #565252;
+      padding: 8px 12px;
+      border-radius: 5px;
+    }
+
+    #fullscreenBtn {
+      font-size: 24px;
+    }
+
+    #toggleControlsBtn {
+      position: fixed;
+      bottom: 10%;
+      left: 50%;
+      transform: translateX(-50%) rotate(0deg);
+      color: rgba(255, 255, 255, 0.7);
+      border: none;
+      font-size: 36px;
+      cursor: pointer;
+      z-index: 1;
+      background: none;
+      transition: transform 0.3s ease;
+    }
+
     #settings {
       position: fixed;
       top: 10%;
@@ -60,7 +102,7 @@
       color: #ddd;
     }
 
-    #settings input {
+    #settings input, #settings select {
       width: 100%;
       padding: 5px;
       margin-top: 5px;
@@ -113,36 +155,62 @@
     <p id="text"></p>
   </div>
 
+  <div id="controls">
+    <button id="startBtn">Iniciar</button>
+    <button id="stopBtn">Detener</button>
+    <button id="fullscreenBtn">Pantalla completa</button>
+    <button id="settingsBtn">Configuración</button>
+  </div>
+
+  <button id="toggleControlsBtn">^</button>
+
   <div id="settings">
-    <label for="popup1Delay">Tiempo para mostrar el primer pop-up (segundos):</label>
-    <input type="number" id="popup1Delay" min="1" value="10" />
+    <label for="bgColor">Color de fondo:</label>
+    <input type="color" id="bgColor" value="#000000" />
 
-    <label for="video1URL">URL del primer video de YouTube:</label>
-    <input type="url" id="video1URL" placeholder="https://youtu.be/VIDEO_ID" required />
+    <label for="opacity">Opacidad del fondo:</label>
+    <input type="range" id="opacity" min="0" max="1" step="0.1" value="0.7" />
 
-    <label for="popup2Delay">Tiempo para mostrar el segundo pop-up (segundos):</label>
-    <input type="number" id="popup2Delay" min="1" value="20" />
+    <label for="fontSize">Tamaño de letra:</label>
+    <input type="range" id="fontSize" min="2" max="10" step="0.1" value="6" />vw
 
-    <label for="video2URL">URL del segundo video de YouTube:</label>
-    <input type="url" id="video2URL" placeholder="https://youtu.be/VIDEO_ID" required />
+    <label for="fontType">Tipo de letra:</label>
+    <select id="fontType">
+      <option value="Arial">Arial</option>
+      <option value="Verdana">Verdana</option>
+      <option value="Courier New">Courier New</option>
+      <option value="Georgia">Georgia</option>
+    </select>
 
+    <label for="popupDelay">Tiempo para mostrar el primer pop-up (segundos):</label>
+    <input type="number" id="popupDelay" min="1" value="10" />
+
+    <label for="videoURL">URL del primer video de YouTube:</label>
+    <input type="url" id="videoURL" placeholder="https://youtu.be/VIDEO_ID" required />
+
+    <label for="popupDelay2">Tiempo para mostrar el segundo pop-up (segundos):</label>
+    <input type="number" id="popupDelay2" min="1" value="15" />
+
+    <label for="videoURL2">URL del segundo video de YouTube:</label>
+    <input type="url" id="videoURL2" placeholder="https://youtu.be/VIDEO_ID" required />
     <button id="startSettingsBtn">Guardar y Comenzar</button>
   </div>
 
   <!-- Pop-up de anuncio -->
-  <div id="popup1" class="popup">
-    <iframe id="adVideo1" allow="autoplay"></iframe>
-    <button id="closePopup1Btn">Cerrar</button>
-  </div>
-
-  <div id="popup2" class="popup">
-    <iframe id="adVideo2" allow="autoplay"></iframe>
-    <button id="closePopup2Btn">Cerrar</button>
+  <div id="popup">
+    <iframe id="adVideo" allow="autoplay"></iframe>
+    <p>Podrás cerrar este anuncio en <span id="countdown">15</span> segundos</p>
+    <button id="closePopupBtn">Cerrar</button>
   </div>
 
   <script>
-    let popup1Timer, popup2Timer;
-    let video1URL = "", video2URL = "";
+    let recognition;
+    let popupTimer, popupTimer2, countdownTimer;
+    const transcription = document.querySelector("#text");
+    const controls = document.getElementById("controls");
+    const toggleControlsBtn = document.getElementById("toggleControlsBtn");
+    let embedURL = "";
+    let embedURL2 = "";
 
     function initCamera() {
       const video = document.getElementById('camera');
@@ -155,18 +223,82 @@
         });
     }
 
-    function showPopup(popupId, videoURL) {
-      const popup = document.getElementById(popupId);
-      const videoFrame = popup.querySelector("iframe");
-      videoFrame.src = videoURL;
-      popup.style.display = "block";
+    function initSpeechRecognition() {
+      if (typeof webkitSpeechRecognition !== "undefined") {
+        recognition = new webkitSpeechRecognition();
+      } else {
+        alert("Tu navegador no soporta Speech Recognition.");
+        return;
+      }
+
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = "es-ES";
+
+      recognition.addEventListener("result", function (e) {
+        let interimTranscript = '';
+        let finalTranscript = '';
+
+        for (let i = 0; i < e.results.length; i++) {
+          let transcript = e.results[i][0].transcript.trim();
+          if (e.results[i].isFinal) {
+            finalTranscript += transcript + ' ';
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+
+        transcription.textContent = finalTranscript || interimTranscript;
+      });
+
+      recognition.addEventListener("end", function () {
+        recognition.start();
+      });
     }
 
-    function closePopup(popupId) {
-      const popup = document.getElementById(popupId);
-      const videoFrame = popup.querySelector("iframe");
-      videoFrame.src = "";
-      popup.style.display = "none";
+    function startRecognition() {
+      if (!recognition) {
+        initSpeechRecognition();
+      }
+      recognition.start();
+    }
+
+    function stopRecognition() {
+      if (recognition) {
+        recognition.stop();
+      }
+    }
+
+    function showPopup() {
+      stopRecognition();
+      document.getElementById("adVideo").src = embedURL;
+      document.getElementById("popup").style.display = "block";
+      handleCountdown();
+    }
+
+    function showPopup2() {
+      stopRecognition();
+      document.getElementById("adVideo").src = embedURL2;
+      document.getElementById("popup").style.display = "block";
+      handleCountdown();
+    }
+
+    function handleCountdown() {
+      let countdown = 15;
+      const countdownElem = document.getElementById("countdown");
+      const closeBtn = document.getElementById("closePopupBtn");
+
+      countdownElem.textContent = countdown;
+      closeBtn.style.display = "none";
+
+      countdownTimer = setInterval(() => {
+        countdown--;
+        countdownElem.textContent = countdown;
+        if (countdown <= 0) {
+          clearInterval(countdownTimer);
+          closeBtn.style.display = "inline";
+        }
+      }, 1000);
     }
 
     function convertYouTubeURL(url) {
@@ -176,33 +308,76 @@
       } else if (url.includes("youtube.com/watch?v=")) {
         videoId = url.split("watch?v=")[1].split("&")[0];
       }
-      return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0` : url;
+      return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1` : url;
     }
 
+    document.getElementById("closePopupBtn").addEventListener("click", () => {
+      document.getElementById("popup").style.display = "none";
+      document.getElementById("adVideo").src = "";
+      startRecognition();
+    });
+
+    document.getElementById("fullscreenBtn").addEventListener("click", () => {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen();
+      }
+    });
+
+    document.querySelector('#startBtn').addEventListener('click', startRecognition);
+    document.querySelector('#stopBtn').addEventListener('click', stopRecognition);
+
+    document.querySelector('#settingsBtn').addEventListener('click', () => {
+      const settings = document.getElementById('settings');
+      settings.style.display = settings.style.display === 'none' ? 'block' : 'none';
+    });
+
+    toggleControlsBtn.addEventListener('click', () => {
+      if (controls.style.bottom === "20px") {
+        controls.style.bottom = "-200px";
+        toggleControlsBtn.style.transform = "translateX(-50%) rotate(0deg)";
+      } else {
+        controls.style.bottom = "20px";
+        toggleControlsBtn.style.transform = "translateX(-50%) rotate(180deg)";
+      }
+    });
+
+    document.querySelector('#bgColor').addEventListener('input', (e) => {
+      document.querySelector('#transcription').style.backgroundColor = e.target.value;
+    });
+
+    document.querySelector('#opacity').addEventListener('input', (e) => {
+      document.querySelector('#transcription').style.opacity = e.target.value;
+    });
+
+    document.querySelector('#fontSize').addEventListener('input', (e) => {
+      document.querySelector('#transcription').style.fontSize = e.target.value + 'vw';
+    });
+
+    document.querySelector('#fontType').addEventListener('change', (e) => {
+      document.querySelector('#transcription').style.fontFamily = e.target.value;
+    });
+
     document.getElementById("startSettingsBtn").addEventListener("click", () => {
-      const delay1 = parseInt(document.getElementById("popup1Delay").value) * 1000;
-      const delay2 = parseInt(document.getElementById("popup2Delay").value) * 1000;
-      video1URL = convertYouTubeURL(document.getElementById("video1URL").value);
-      video2URL = convertYouTubeURL(document.getElementById("video2URL").value);
+      const delay1 = parseInt(document.getElementById("popupDelay").value) * 1000;
+      const videoURL1 = document.getElementById("videoURL").value;
+      embedURL = convertYouTubeURL(videoURL1);
+
+      const delay2 = parseInt(document.getElementById("popupDelay2").value) * 1000;
+      const videoURL2 = document.getElementById("videoURL2").value;
+      embedURL2 = convertYouTubeURL(videoURL2);
 
       document.getElementById("settings").style.display = "none";
 
-      // Configura los temporizadores para mostrar los pop-ups
-      popup1Timer = setTimeout(() => showPopup("popup1", video1URL), delay1);
-      popup2Timer = setTimeout(() => showPopup("popup2", video2URL), delay2);
-    });
+      popupTimer = setTimeout(showPopup, delay1);
+      popupTimer2 = setTimeout(showPopup2, delay2);
 
-    document.getElementById("closePopup1Btn").addEventListener("click", () => {
-      closePopup("popup1");
-    });
-
-    document.getElementById("closePopup2Btn").addEventListener("click", () => {
-      closePopup("popup2");
+      startRecognition();
     });
 
     window.onload = () => {
       document.getElementById("settings").style.display = "block";
       initCamera();
+      startRecognition();
     };
   </script>
 </body>
